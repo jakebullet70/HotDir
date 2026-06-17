@@ -19,7 +19,7 @@
 #include once "hd_types_enums.bi"
 #include once "hd_console.bi"
 
-Const VERSION_STRING = "0.9.0 (Beta)"
+Const VERSION_STRING = "0.9.1 (Working Beta)"
 
 '#Region "Helpers"
 '' --- forward declarations ---------------------------------------------------
