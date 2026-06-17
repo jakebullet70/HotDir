@@ -197,13 +197,39 @@ Sub ProcessPathArg(ByRef si As typeSearchInfo, ByVal Arg As String)
 End Sub
 
 
+'' Fetch command-line arguments straight from Windows, bypassing the C runtime's
+'' argv -- which globs wildcards ("*.exe" gets pre-expanded into the matching file
+'' names before the program runs).  CommandLineToArgvW never expands wildcards, so
+'' patterns reach us intact.  Returns the count; Args(0) is the program name.
+Declare Function fbGetCommandLineW Lib "kernel32" Alias "GetCommandLineW" () As WString Ptr
+Declare Function fbCommandLineToArgvW Lib "shell32" Alias "CommandLineToArgvW" _
+    (ByVal lpCmdLine As WString Ptr, ByVal pNumArgs As Long Ptr) As WString Ptr Ptr
+Declare Function fbLocalFree Lib "kernel32" Alias "LocalFree" (ByVal hMem As Any Ptr) As Any Ptr
+
+Function GetRealArgs(Args() As String) As Integer
+    Dim As Long argc = 0
+    Dim As WString Ptr Ptr argv = fbCommandLineToArgvW(fbGetCommandLineW(), @argc)
+    If argv = 0 Then Return 0
+
+    ReDim Args(argc - 1)
+    Dim As Integer i
+    For i = 0 To argc - 1
+        Args(i) = *argv[i]      '' WString -> String (ANSI) conversion
+    Next
+    fbLocalFree(argv)
+    Return argc
+End Function
+
+
 Sub ProcessCommandLine(ByRef si As typeSearchInfo)
     Dim As String Arg, c
+    Dim As String Args()
+    Dim As Integer argc = GetRealArgs(Args())
     Dim As Integer i = 1
 
     Do
-        Arg = Command(i)
-        If Arg = "" Then Exit Do
+        If i >= argc Then Exit Do
+        Arg = Args(i)
         i += 1
 
         If Len(Arg) > 0 AndAlso Left(Arg, 1) = "/" Then
