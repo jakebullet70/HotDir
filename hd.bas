@@ -14,7 +14,6 @@
 ''  NO WARRANTY WHATSOEVER! But it just reads...
 
 #include once "windows.bi"
-#include once "vbcompat.bi"   '' Format()
 #include once "hd_consts.bi"
 #include once "hd_strings.bi"
 #include once "hd_types_enums.bi"
@@ -304,6 +303,14 @@ Sub SortFileEntries(Entries() As typeFileEntry, ByVal Count As Integer, _
 End Sub
 
 
+'' Render a non-negative Double with exactly one decimal place ("15.2", "476.0").
+'' Replaces vbcompat's Format(x, "0.0") so the runtime stays lean.
+Function OneDecimal(ByVal value As Double) As String
+    Dim As LongInt scaled = CLngInt(value * 10.0 + 0.5)   '' round half up (sizes are >= 0)
+    Return Str(scaled \ 10) & "." & Str(scaled Mod 10)
+End Function
+
+
 '' Render a file size as a fixed 8-character field (e.g. " 15.1 KB").
 Function SizeField(ByVal SizeBytes As Double) As String
     Dim As Double s = SizeBytes
@@ -315,15 +322,15 @@ Function SizeField(ByVal SizeBytes As Double) As String
                 s = s / 1024.0          '' GB
                 If s > 1023 Then
                     s = s / 1024.0      '' TB
-                    Return PadLeft(Format(s, "0.0"), 5) & " TB"
+                    Return PadLeft(OneDecimal(s), 5) & " TB"
                 Else
-                    Return PadLeft(Format(s, "0.0"), 5) & " GB"
+                    Return PadLeft(OneDecimal(s), 5) & " GB"
                 End If
             Else
-                Return PadLeft(Format(s, "0.0"), 5) & " MB"
+                Return PadLeft(OneDecimal(s), 5) & " MB"
             End If
         Else
-            Return PadLeft(Format(s, "0.0"), 5) & " KB"
+            Return PadLeft(OneDecimal(s), 5) & " KB"
         End If
     Else
         Return PadLeft(Str(Int(s)), 5) & " B "
@@ -489,4 +496,5 @@ ProcessFiles(ConsoleInfo, SearchInfo)
 DisplayFooter(ConsoleInfo, SearchInfo)
 
 RestoreConsole(ConsoleInfo)
+End 0
 '#End Region
