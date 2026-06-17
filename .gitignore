@@ -1,0 +1,31 @@
+# ---- FreeBASIC build artifacts ----
+# Compiled programs / libraries
+*.exe
+*.dll
+*.a
+*.lib
+*.def
+
+# Object files
+*.o
+*.obj
+
+# fbc intermediate output (-gen gcc / -r / -RR keep .c/.asm)
+*.c
+*.asm
+
+# Debug symbols / map files
+*.pdb
+*.dbg
+*.map
+
+# NOTE: FreeBASIC source is kept:
+#   *.bas  main/source files
+#   *.bi   include files (hd_consts.bi, hd_strings.bi, ...)
+
+# ---- Editor / OS junk ----
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+.DS_Store
