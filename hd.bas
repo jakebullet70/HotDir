@@ -19,7 +19,8 @@
 #include once "hd_types_enums.bi"
 #include once "hd_console.bi"
 
-Const VERSION_STRING = "0.9.1 (Working Beta)"
+Const VERSION_STRING = "1.0.0" : Const COPY_WRITE =   "Public domain - 2026"
+
 
 '#Region "Helpers"
 '' --- forward declarations ---------------------------------------------------
@@ -107,6 +108,27 @@ End Function
 Function CreateHorizontalLine(ByRef ci As typeConsoleInfo) As String
     Return String(ci.Width, HLINE_CHAR)
 End Function
+
+
+'' Horizontal rule with a junction byte dropped in wherever a column separator
+'' '|' lands, so the top/bottom borders connect to the inner vertical lines.
+'' JunctionChar = TDOWN_CHAR for the top rule, TUP_CHAR for the bottom.
+Function CreateGridRule(ByRef ci As typeConsoleInfo, ByVal Cols As Integer, ByVal JunctionChar As Integer) As String
+    Dim As String  RuleLine = String(ci.Width, HLINE_CHAR)
+    If Cols < 1 Then Cols = 1
+    Dim As Integer CellWidth = (ci.Width - 1) \ Cols
+    Dim As Integer NameWidth = CellWidth - 10
+    If NameWidth < 1 Then NameWidth = 1
+
+    '' Separators sit after the name + 8-char size field, for every column but
+    '' the last (which has no trailing separator). Mid() is 1-based.
+    Dim As Integer c, SepCol
+    For c = 0 To Cols - 2
+        SepCol = c * CellWidth + NameWidth + 8
+        If SepCol >= 0 AndAlso SepCol < ci.Width Then Mid(RuleLine, SepCol + 1, 1) = Chr(JunctionChar)
+    Next c
+    Return RuleLine
+End Function
 '#End Region
 
 
@@ -114,12 +136,12 @@ End Function
 Sub DisplayHeader(ByRef ci As typeConsoleInfo, ByRef si As typeSearchInfo)
     ColorFG(ci, BRIGHT_WHITE)
     Print
-    Print "HotDIR " & VERSION_STRING
+    Print "HotDIR " & VERSION_STRING & " - " & COPY_WRITE
     ColorFG(ci, AQUA)
     Print "Path: "; si.Path
 
-    '' Draw horizontal line across the screen using the raw CP437 byte.
-    Print String(ci.Width, HLINE_CHAR);
+    '' Top border, with down-tee junctions where the column rules begin.
+    Print CreateGridRule(ci, si.Columns, TDOWN_CHAR);
 End Sub
 
 
@@ -127,7 +149,8 @@ Sub DisplayHelp(ByRef ci As typeConsoleInfo)
  
     ColorFG(ci, PURPLE) : Print : Print "Clone of ";
     ColorFG(ci, YELLOW) : Print "HotDIR ";
-    ColorFG(ci, PURPLE) : Print "by Steve De George and Cluade (Stupid AI!)  -->" & VERSION_STRING
+    ColorFG(ci, PURPLE) : Print "By Steve De George SR and Claude (Stupid AI!)  -> " & VERSION_STRING  & " - " & COPY_WRITE
+    ColorFG(ci, PURPLE) : Print "Written in FreeBASIC, not C or RUST or GO"
     ColorFG(ci, AQUA)   : Print : Print "Usage:"
     ColorFG(ci, WHITE)  : Print Chr(9) & "HD [options] [drive:\][path][search-string]"
     ColorFG(ci, AQUA)   : Print : Print "Options:"
@@ -151,14 +174,36 @@ Sub DisplayFooter(ByRef ci As typeConsoleInfo, ByRef si As typeSearchInfo)
     Dim As String         root = Left(si.Path, 3)        '' "X:\"
     Dim As ULARGE_INTEGER FreeAvail, TotalBytes, TotalFree
 
-    If GetDiskFreeSpaceExA(StrPtr(root), @FreeAvail, @TotalBytes, @TotalFree) = 0 Then Exit Sub
+    '' Bottom rule, then the dir/file tallies (always shown).
+    ColorFG(ci, AQUA)         : Print CreateGridRule(ci, si.Columns, TUP_CHAR);
+    ColorFG(ci, AQUA)         : Print "Total: ";
+    ColorFG(ci, BRIGHT_WHITE) : Print Str(si.DirCount);
+    ColorFG(ci, AQUA)         : Print " dir(s)   ";
+    ColorFG(ci, BRIGHT_WHITE) : Print Str(si.FileCount);
+    ColorFG(ci, AQUA)         : Print " file(s)";
 
-    ColorFG(ci, AQUA)         : Print String(ci.Width, HLINE_CHAR);
-    ColorFG(ci, AQUA)         : Print "Available space of disk:  ";
-    ColorFG(ci, AQUA)         : Print "Free ";
-    ColorFG(ci, BRIGHT_WHITE) : Print CompactSizeWithSuffix(CDbl(FreeAvail.QuadPart));
+    '' Free / total disk space, right-justified to the console edge on the same
+    '' line as the Total tally (skipped if the drive can't be queried).
+    If GetDiskFreeSpaceExA(StrPtr(root), @FreeAvail, @TotalBytes, @TotalFree) = 0 Then
+        Print
+        Exit Sub
+    End If
+
+    Dim As String FreeStr   = CompactSizeWithSuffix(CDbl(FreeAvail.QuadPart))
+    Dim As String TotStr    = CompactSizeWithSuffix(CDbl(TotalBytes.QuadPart))
+    Dim As String SpaceText = "Available Free Space " & FreeStr & " of " & TotStr
+
+    '' Pad from the current cursor column so the text ends at the right edge.
+    Dim As CONSOLE_SCREEN_BUFFER_INFO csbi
+    GetConsoleScreenBufferInfo(ci.ConsoleHandle, @csbi)
+    Dim As Integer Pad = (ci.Width - 1) - csbi.dwCursorPosition.X - Len(SpaceText)
+    If Pad < 1 Then Pad = 1
+    Print Space(Pad);
+
+    ColorFG(ci, AQUA)         : Print "Available Free Space ";
+    ColorFG(ci, BRIGHT_WHITE) : Print FreeStr;
     ColorFG(ci, AQUA)         : Print " of ";
-    ColorFG(ci, BRIGHT_WHITE) : Print CompactSizeWithSuffix(CDbl(TotalBytes.QuadPart))
+    ColorFG(ci, BRIGHT_WHITE) : Print TotStr
 End Sub
 '#End Region
 
@@ -434,49 +479,63 @@ Function ProcessFiles(ByRef ci As typeConsoleInfo, ByRef si As typeSearchInfo) A
 
         For c = 0 To Cols - 1
             '' Column-major (top-to-bottom) by default; row-major with /L.
+            Dim As Integer CellEmpty = 0
             If si.LeftToRight Then
                 idx = r * Cols + c
-                If idx >= Count Then Continue For
+                If idx >= Count Then CellEmpty = -1
             Else
                 If c < FullCols Then
                     ColHeight = Rows     : ColStart = c * Rows
                 Else
                     ColHeight = Rows - 1 : ColStart = FullCols * Rows + (c - FullCols) * (Rows - 1)
                 End If
-                If r >= ColHeight Then Continue For
-                idx = ColStart + r
+                If r >= ColHeight Then CellEmpty = -1 Else idx = ColStart + r
             End If
 
-            With Entries(idx)
-                If .IsDir Then
-                    ColorFG(ci, LIGHT_PURPLE)
-                Else
-                    FileCount += 1
-                    ColorFG(ci, ColorForExt(.Ext))
-                End If
+            If CellEmpty Then
+                '' Empty cell: blank the body but keep the column rule going so
+                '' the vertical lines in short columns don't get gaps.
+                Print Space(NameWidth + 8);
+            Else
+                With Entries(idx)
+                    If .IsDir Then
+                        ColorFG(ci, LIGHT_PURPLE)
+                    Else
+                        FileCount += 1
+                        ColorFG(ci, ColorForExt(.Ext))
+                    End If
 
-                '' Dark red for hidden files.
-                If .IsHidden Then ColorFG(ci, RED)
+                    '' Dark red for hidden files.
+                    If .IsHidden Then ColorFG(ci, RED)
 
-                '' File name, fitted (extension-preserving) and padded to the cell.
-                NameCell = FitName(.FileName, NameWidth)
-                Print PadRight(NameCell, NameWidth);
+                    '' File name, fitted (extension-preserving) and padded to the cell.
+                    NameCell = FitName(.FileName, NameWidth)
+                    Print PadRight(NameCell, NameWidth);
 
-                If .IsDir Then
-                    Print "  <dir> ";
-                Else
-                    TotalSize = TotalSize + .Size
-                    ColorFG(ci, GRAY)
-                    Print SizeField(.Size);
-                End If
+                    If .IsDir Then
+                        Print "  <dir> ";
+                    Else
+                        TotalSize = TotalSize + .Size
+                        ColorFG(ci, GRAY)
+                        Print SizeField(.Size);
+                    End If
+                End With
+            End If
 
+            '' Column separator between cells, but not after the last column
+            '' (no vertical line down the far-right edge).
+            If c < Cols - 1 Then
                 ColorFG(ci, AQUA)
-                Print Chr(VBAR_CHAR) & " ";    '' column separator
-            End With
+                Print Chr(VBAR_CHAR) & " ";
+            End If
         Next c
 
         Print                                  '' end of row
     Next r
+
+    '' Hand the tallies to the footer (every entry is either a file or a dir).
+    si.FileCount = FileCount
+    si.DirCount  = Count - FileCount
 
     Return FileCount
 End Function

@@ -26,6 +26,8 @@ Const BRIGHT_WHITE = 15
 '' CP437 box-drawing bytes.
 Const HLINE_CHAR = 196   '' horizontal line
 Const VBAR_CHAR  = 179   '' vertical line
+Const TDOWN_CHAR = 194   '' top junction (down tee) where a column rule begins
+Const TUP_CHAR   = 193   '' bottom junction (up tee) where a column rule ends
 
 '' File-extension -> colour categories (taken verbatim from the original).
 '' Stored as space-delimited lists (leading + trailing space) so membership is

@@ -26,6 +26,8 @@ Type typeSearchInfo
     ShouldClearScreen As Integer
     Columns           As Integer       '' entries laid out per row (1 = single column)
     LeftToRight       As Integer       '' -1 = row-major (/L), 0 = column-major (top-to-bottom)
+    FileCount         As Integer       '' files listed (filled in by ProcessFiles, shown in footer)
+    DirCount          As Integer       '' directories listed (filled in by ProcessFiles, shown in footer)
 End Type
 
 '' One enumerated directory entry, captured up-front so the whole listing can
